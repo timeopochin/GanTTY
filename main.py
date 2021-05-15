@@ -5,9 +5,12 @@ import termios
 import datetime
 import signal
 import traceback
+import pickle
 from ui import *
 from gantt import *
 
+# Key bindings
+QUIT = 'q'
 DAY_WEEK_TOGGLE = 'w'
 
 PAN_UP = 'I'
@@ -17,7 +20,7 @@ PAN_RIGHT = 's'
 
 PAN_TOP = 'g'
 PAN_BOTTOM = 'G'
-PAN_START = 'R'
+PAN_START = 'b'
 
 SELECT_UP = 'i'
 SELECT_DOWN = 't'
@@ -25,12 +28,18 @@ SELECT_DOWN = 't'
 GROW_TASK = '+'
 SHRINK_TASK = '-'
 
+GROW_TASK_TITLE = 'S'
+SHRINK_TASK_TITLE = 'R'
+
 TOGGLE_DONE_OR_DEP = ' '
 TOGGLE_SELECT_DEPS = 'd'
 
 ADD_TASK = 'a'
+RENAME_TASK = 'n'
 EDIT_TASK = 'e'
+DELETE_TASK = 'D'
 
+WRITE_TO_FILE = 'W'
 
 def draw(view):
 
@@ -42,11 +51,45 @@ def draw(view):
 
     drawTasks(view)
 
+    drawInfo(view)
+
     # Flush
     sys.stdout.flush()
 
 def process(view, char):
 
+    redraw = True
+
+    if len(view.project.tasks):
+
+        # Needs at least 1 task
+        if char == SELECT_UP:
+            view.selectUp()
+        elif char == SELECT_DOWN:
+            view.selectDown()
+
+        elif char == GROW_TASK:
+            view.growCurrent()
+        elif char == SHRINK_TASK:
+            view.shrinkCurrent()
+
+        elif char == TOGGLE_DONE_OR_DEP:
+            if view.selectingDeps:
+                view.toggleDep()
+            else:
+                view.toggleDoneCurrent()
+
+        elif char == TOGGLE_SELECT_DEPS:
+            view.selectDeps()
+
+        elif char == RENAME_TASK:
+            view.renameCurrent(fd, oldSettings)
+        elif char == DELETE_TASK:
+            view.deleteCurrent(fd, oldSettings)
+        elif char == EDIT_TASK:
+            view.editCurrent()
+
+    # Can be done with no tasks
     if char == DAY_WEEK_TOGGLE:
         view.toggleView()
 
@@ -68,32 +111,27 @@ def process(view, char):
     elif char == PAN_START:
         view.firstDateOffset = 0
 
-    elif char == SELECT_UP:
-        view.selectUp()
-    elif char == SELECT_DOWN:
-        view.selectDown()
+    elif char == GROW_TASK_TITLE:
+        view.growTaskTitle()
+    elif char == SHRINK_TASK_TITLE:
+        view.shrinkTaskTitle()
 
-    elif char == GROW_TASK:
-        view.growCurrent()
-    elif char == SHRINK_TASK:
-        view.shrinkCurrent()
+    elif char == ADD_TASK:
+        view.addTask(fd, oldSettings)
 
-    elif char == TOGGLE_DONE_OR_DEP:
-        if view.selectingDeps:
-            view.toggleDep()
-        else:
-            view.toggleDoneCurrent()
-
-    elif char == TOGGLE_SELECT_DEPS:
-        view.selectDeps()
-
-    #elif char == ADD_TASK:
-        #view.addTask()
+    elif char == WRITE_TO_FILE:
+        with open(FILE_NAME, 'wb') as ganttFile:
+            pickle.dump(view, ganttFile)
+        view.unsavedEdits = False
+        drawInfo(view, 'Project saved!')
+        sys.stdout.flush()
+        redraw = False
 
     else:
         pass
 
-    draw(view)
+    if redraw:
+        draw(view)
 
 def onResize(view):
     view.updateSize()
@@ -105,64 +143,71 @@ def onResize(view):
 
     draw(view)
 
-if __name__ == '__main__':
+# Get file name
+if len(sys.argv) < 2:
+    print('USAGE: gantt <filename>')
+    exit()
 
-    # Setup raw mode
-    fd = sys.stdin.fileno()
-    oldSettings = termios.tcgetattr(fd)
-    tty.setraw(sys.stdin)
+FILE_NAME = sys.argv[1]
+
+# Setup raw mode
+fd = sys.stdin.fileno()
+oldSettings = termios.tcgetattr(fd)
+tty.setraw(sys.stdin)
+
+endMsg = ''
+endClear = False
+
+try:
 
     try:
+        with open(FILE_NAME, 'rb') as ganttFile:
+            view = pickle.load(ganttFile)
+        if type(view) is not View:
+            endMsg = 'Could not read file correctly!'
+            raise
+        view.unsavedEdits = False
+    except (FileNotFoundError, EOFError):
+        view = View(Project('Untitled'))
+    except pickle.UnpicklingError:
+        endMsg = 'Could not read file correctly!'
+        raise
 
-        # Create the project and view
-        project = Project('Example project')
-        project.startDate = datetime.date(2021, 5, 12)
-        project.addTask('Task 0', 1, 0)
-        project.addTask('Task 1', 1, 0)
-        project.addTask('Task 2', 1, 0)
-        project.addTask('Task 3', 1, 0)
-        project.addTask('Task 4', 1, 0)
-        project.addTask('Task 5', 1, 0)
-        project.addTask('Task 6', 1, 0)
-        project.addTask('Task 7', 1, 0)
-        project.addTask('Task 8', 1, 0)
-        project.addTask('Task 9', 1, 0)
-        project.addTask('Task 10', 1, 0)
-        project.addTask('Task 11', 1, 0)
-        project.addTask('Task 12', 1, 0)
-        project.addTask('Task 13', 1, 0)
-        project.addTask('Task 14', 1, 0)
-        project.addTask('Task 15', 1, 0)
-        project.addTask('Task 16', 1, 0)
-        project.addTask('Task 17', 1, 0)
+    # Redraw on resize
+    signal.signal(signal.SIGWINCH, lambda signum, frame: onResize(view))
 
-        view = View(project)
+    # Hide the cursor
+    write('\x1b[?25l')
 
-        # Redraw on resize
-        signal.signal(signal.SIGWINCH, lambda signum, frame: onResize(view))
+    # Draw the screen
+    endClear = True
+    draw(view)
 
-        # Hide the cursor
-        write('\x1b[?25l')
-
-        # Draw the screen
-        draw(view)
-
-        # Read input
-        while True:
-            char = sys.stdin.read(1)
-            if char == 'q':
+    # Read input
+    while True:
+        char = sys.stdin.read(1)
+        if char == QUIT:
+            if view.unsavedEdits:
+                confirm = getInputText(view, 'About to quit with unsaved edits! Are you sure you want to continue? ', fd, oldSettings)
+                if confirm.lower() == 'yes':
+                    break
+            else:
                 break
-            process(view, char)
+        process(view, char)
 
-    # Avoid breaking the terminal after a crash
-    except Exception:
-        tb = traceback.format_exc()
-    else:
-        tb = ''
+# Avoid breaking the terminal after a crash
+except Exception:
+    tb = traceback.format_exc()
+else:
+    tb = ''
 
-    # Restore terminal settings
-    reset()
+# Restore terminal settings
+reset()
+if endClear:
     clear()
-    write('\x1b[?25h\n\r')
-    termios.tcsetattr(fd, termios.TCSADRAIN, oldSettings)
+write('\x1b[?25h\n\r')
+termios.tcsetattr(fd, termios.TCSADRAIN, oldSettings)
+if endMsg:
+    print(endMsg)
+else:
     print(tb)

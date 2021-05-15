@@ -1,5 +1,9 @@
 import os
+import termios
+import tty
 import sys
+import subprocess
+import tempfile
 import datetime
 from gantt import *
 
@@ -54,16 +58,24 @@ DEPENDENCY_COLOUR = colour.brightYellow
 DIRECT_DEPENDENT_COLOUR = colour.brightBlue
 DEPENDENT_COLOUR = colour.brightCyan
 
-TASK_WIDTH = 16
+# Other colours
+PROMPT_BG_COLOUR = colour.brightWhite
+PROMPT_FG_COLOUR = colour.black
+
+INFO_BG_COLOUR = colour.yellow
+INFO_FG_COLOUR = colour.black
+
+DEFAULT_TASK_WIDTH = 32
 TASK_Y_OFFSET = 4
 
 # Project view
 class View:
     def __init__(self, project):
         self.project = project
-        self.view = WEEK
+        self.view = DAY
         self.columnWidth = 7
         self.selectingDeps = False
+        self.unsavedEdits = True
 
         # Scrolling offsets
         self.firstDateOffset = 0
@@ -77,7 +89,7 @@ class View:
         self.updateSize()
 
         # Defaults
-        self.taskWidth = TASK_WIDTH
+        self.taskWidth = DEFAULT_TASK_WIDTH
 
     @property
     def firstDate(self):
@@ -122,13 +134,26 @@ class View:
 
     def growCurrent(self):
         self.current.length += 1
+        self.unsavedEdits = True
 
     def shrinkCurrent(self):
         if self.current.length > 1:
             self.current.length -= 1
+            self.unsavedEdits = True
+
+    def growTaskTitle(self):
+        self.taskWidth += 1
+
+    def shrinkTaskTitle(self):
+        if self.taskWidth > 0:
+            self.taskWidth -= 1
 
     def toggleDoneCurrent(self):
-        self.current.isDone = not self.current.isDone
+        if self.current.isDone:
+            self.current.setNotDone()
+        else:
+            self.current.setDone()
+        self.unsavedEdits = True
 
     def selectDeps(self):
         if self.selectingDeps and self.current is self.depsFor:
@@ -139,6 +164,33 @@ class View:
 
     def toggleDep(self):
         self.depsFor.toggleDep(self.current)
+        self.unsavedEdits = True
+
+    def addTask(self, fd, oldSettings):
+        title = getInputText(self, 'Title: ', fd, oldSettings)
+        if title:
+            self.project.addTask(title)
+            self.currentTask = len(self.project.tasks) - 1
+            self.unsavedEdits = True
+
+    def renameCurrent(self, fd, oldSettings):
+        title = getInputText(self, 'New title: ', fd, oldSettings)
+        if title:
+            self.current.title = title
+            self.unsavedEdits = True
+
+    def deleteCurrent(self, fd, oldSettings):
+        confirm = getInputText(self, 'About to delete a task! Are you sure you want to continue? ', fd, oldSettings)
+        if confirm.lower() == 'yes':
+            self.project.removeTask(self.current)
+            self.currentTask -= 1
+
+    def editCurrent(self):
+        initialMsg = self.current.description
+        if not initialMsg:
+            initialMsg = f'== {self.current.title}'
+        self.current.description = getEditorInput(initialMsg)
+        self.unsavedEdits = True
 
 # Writting and cursor
 def write(text):
@@ -206,7 +258,7 @@ def getTaskColour(view, task):
     return DEFAULT_COLOUR
 
 # UI
-def drawDate(view, date):
+def drawDate(view, date, isLast = False):
     day = '       '
     if view.view == DAY:
         day = date.strftime('%a')
@@ -216,7 +268,7 @@ def drawDate(view, date):
             day = ' ' + day + ' '
     write(day)
     godown(1)
-    goleft(7)
+    goleft(6 if isLast else 7)
     write(date.strftime(' %d/%m '))
     goup(1)
 
@@ -228,9 +280,10 @@ def drawGrid(view):
         goto(view.taskWidth, y)
         current = GRID_COLOUR_A
         setBg(current)
-        for i in range((view.width - view.taskWidth)//view.columnWidth):
+        columnCount = (view.width - view.taskWidth)//view.columnWidth
+        for i in range(columnCount):
             if y == 1:
-                drawDate(view, date)
+                drawDate(view, date, view.taskWidth + i*7 == view.width - 7)
                 date += delta
             elif y != 2:
                 write(' '*view.columnWidth)
@@ -280,7 +333,7 @@ def drawTask(view, i):
     setBg(getTaskColour(view, task))
 
     blockUnit = 7 if view.view == DAY else 1
-    block = ' '*task.length*blockUnit + '░'*task.extra*blockUnit
+    block = ' '*task.length*blockUnit + '▒'*task.extra*blockUnit
     start = task.start*blockUnit - view.firstDateOffset*blockUnit
     if start < 0:
         block = block[-start:]
@@ -297,5 +350,39 @@ def drawTask(view, i):
 def drawTasks(view):
     for i in range(len(view.project.tasks) - view.firstTask):
         drawTask(view, i)
+
+def drawInfo(view, msg = ''):
+    goto(0, 0)
+    setBg(INFO_BG_COLOUR)
+    setFg(INFO_FG_COLOUR)
+    if msg:
+        write(f' {msg} ')
+    elif view.selectingDeps:
+        write(f' Selecting dependencies for "{view.depsFor.title}" ')
+    reset()
+
+def getInputText(view, msg, fd, oldSettings):
+    goto(0, 0)
+    setBg(PROMPT_BG_COLOUR)
+    setFg(PROMPT_FG_COLOUR)
+    write(' '*view.width)
+    goto(1, 0)
+    write(f'{msg}\x1b[?25h')
+    termios.tcsetattr(fd, termios.TCSADRAIN, oldSettings)
+    text = input()
+    reset()
+    tty.setraw(sys.stdin)
+    write('\x1b[?25l')
+    return text
+
+def getEditorInput(initialMsg):
+    editor = os.environ.get('EDITOR', 'vim')
+    with tempfile.NamedTemporaryFile('w+', suffix='.adoc') as tf:
+        tf.write(initialMsg)
+        tf.flush()
+        subprocess.call([editor, tf.name])
+        write('\x1b[?25l')
+        tf.seek(0)
+        return tf.read()
 
 #╭╮╰╯─│→├▐█▌┤

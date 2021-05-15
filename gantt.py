@@ -1,3 +1,5 @@
+import datetime
+
 DONE = 0
 ONGOING = 1
 WAITING = 2
@@ -6,13 +8,24 @@ CRITICAL = 3
 
 class Project:
     def __init__(self, name):
+        self.name = name
         self.tasks = []
+        self.startDate = datetime.date.today()
 
     def addTask(self, title,
                 length = 1,
                 earliestStart = 0,
                 isDone = False):
         self.tasks.append(Task(title, self, length, earliestStart, isDone))
+
+    def removeTask(self, toDelete):
+        for i in range(len(self.tasks)):
+            if self.tasks[i] is toDelete:
+                for dependent in toDelete.dependents:
+                    dependent.removeDep(dependent)
+                    dependent.deps += toDelete.deps
+                del self.tasks[i]
+                return
 
     @property
     def end(self):
@@ -29,6 +42,7 @@ class Task:
         self.isDone = isDone
         self.length = length
         self.earliestStart = earliestStart
+        self.description = ''
 
         self.deps = []
         self.project = project
@@ -100,6 +114,8 @@ class Task:
             if dependent.hasDep(newDep):
                 dependent.removeDep(newDep)
         self.deps.append(newDep)
+        if self.isDone:
+            newDep.setDone()
         return True
 
     def removeDep(self, oldDep):
@@ -111,3 +127,14 @@ class Task:
             self.removeDep(toggle)
         else:
             self.setDep(toggle)
+
+    def setDone(self):
+        self.isDone = True
+        for dep in self.deps:
+            dep.setDone()
+
+    def setNotDone(self):
+        self.isDone = False
+        for dependent in self.dependents:
+            dependent.isDone = False
+
