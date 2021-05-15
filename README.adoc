@@ -48,3 +48,16 @@ Tasks::
 * `D` to delete a task
 * `<space>` to toggle a task's status
 * `d` to select a task's dependencies
+
+=== TODOs
+
+* restructure code
+* better keybindings configuration
+
+Urgent new features::
+* set project start date
+
+Future features::
+* export to PlantUML
+* set task earliest start date
+* unicode character dependencies
