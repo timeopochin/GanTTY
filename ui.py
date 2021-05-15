@@ -31,18 +31,28 @@ TASK_BG_COLOUR = colour.default
 CURRENT_TASK_BG_COLOUR = colour.magenta
 CURRENT_TASK_FG_COLOUR = colour.brightWhite
 
+GRID_FG = colour.brightWhite
 GRID_COLOUR_A = colour.black
 GRID_COLOUR_B = colour.default
+TODAY_COLOUR = colour.cyan
+TODAY_FG_COLOUR = colour.black
 
-DONE_COLOUR = colour.brightCyan
+# Default colours
+DEFAULT_COLOUR = colour.brightWhite
+
+# Normal view colours
+DONE_COLOUR = colour.brightGreen
 ONGOING_COLOUR = colour.brightBlue
-WAITING_COLOUR = colour.brightWhite
-
-DONE_EXTRA_COLOUR = colour.cyan
-ONGOING_EXTRA_COLOUR = colour.blue
-WAITING_EXTRA_COLOUR = colour.brightBlack
-
 CRITICAL_COLOUR = colour.brightYellow
+
+# Dependency view colours
+DEPS_OF_COLOUR = colour.brightGreen
+
+DIRECT_DEPENDENCY_COLOUR = colour.brightRed
+DEPENDENCY_COLOUR = colour.brightYellow
+
+DIRECT_DEPENDENT_COLOUR = colour.brightBlue
+DEPENDENT_COLOUR = colour.brightCyan
 
 TASK_WIDTH = 16
 TASK_Y_OFFSET = 4
@@ -61,13 +71,12 @@ class View:
 
         # Cursor
         self.currentTask = 0
+        self.inputtingTitle = False
 
         # Size
         self.updateSize()
 
         # Defaults
-        self.gridColourA = GRID_COLOUR_A
-        self.gridColourB = GRID_COLOUR_B
         self.taskWidth = TASK_WIDTH
 
     @property
@@ -122,15 +131,14 @@ class View:
         self.current.isDone = not self.current.isDone
 
     def selectDeps(self):
-        if self.selectingDeps:
+        if self.selectingDeps and self.current is self.depsFor:
             self.selectingDeps = False
             return
         self.selectingDeps = True
         self.depsFor = self.current
 
     def toggleDep(self):
-        #if self.
-        self.depsFor.setDep(self.currentTask)
+        self.depsFor.toggleDep(self.current)
 
 # Writting and cursor
 def write(text):
@@ -176,33 +184,72 @@ def setFg(fg):
 def reset():
     write('\x1b[39;49m')
 
+def getTaskColour(view, task):
+    if view.selectingDeps:
+        if task is view.depsFor:
+            return DEPS_OF_COLOUR
+        if task in view.depsFor.deps:
+            return DIRECT_DEPENDENCY_COLOUR
+        if task in view.depsFor.dependents:
+            return DIRECT_DEPENDENT_COLOUR
+        if view.depsFor.hasDep(task):
+            return DEPENDENCY_COLOUR
+        if view.depsFor.hasDependent(task):
+            return DEPENDENT_COLOUR
+        return DEFAULT_COLOUR
+    if task.status == DONE:
+        return DONE_COLOUR
+    if task.status == ONGOING:
+        return ONGOING_COLOUR
+    if task.status == CRITICAL:
+        return CRITICAL_COLOUR
+    return DEFAULT_COLOUR
+
 # UI
+def drawDate(view, date):
+    day = '       '
+    if view.view == DAY:
+        day = date.strftime('%a')
+        if not len(day) % 2:
+            day += ' '
+        while len(day) < 7:
+            day = ' ' + day + ' '
+    write(day)
+    godown(1)
+    goleft(7)
+    write(date.strftime(' %d/%m '))
+    goup(1)
+
 def drawGrid(view):
     date = view.firstDate
     delta = datetime.timedelta(days = 1 if view.view == DAY else 7)
+    setFg(GRID_FG)
     for y in range(view.height):
         goto(view.taskWidth, y)
-        current = view.gridColourA
+        current = GRID_COLOUR_A
         setBg(current)
         for i in range((view.width - view.taskWidth)//view.columnWidth):
             if y == 1:
-                day = '       '
-                if view.view == DAY:
-                    day = date.strftime('%a')
-                    if not len(day) % 2:
-                        day += ' '
-                    while len(day) < 7:
-                        day = ' ' + day + ' '
-                write(day)
-                godown(1)
-                goleft(7)
-                write(date.strftime(' %d/%m '))
-                goup(1)
+                drawDate(view, date)
                 date += delta
             elif y != 2:
                 write(' '*view.columnWidth)
-            current = view.gridColourB if current == view.gridColourA else view.gridColourA
+            current = GRID_COLOUR_B if current == GRID_COLOUR_A else GRID_COLOUR_A
             setBg(current)
+
+    # Draw today
+    unitBlock = 7 if view.view == DAY else 1
+    today = datetime.datetime.now()
+    offset = today - datetime.datetime.combine(view.firstDate, datetime.datetime.min.time())
+    now = offset.days*unitBlock + (offset.seconds*unitBlock)//(60*60*24)
+    if offset.days >= 0 and now <= view.width - view.taskWidth:
+        goto(view.taskWidth + now, TASK_Y_OFFSET)
+        setBg(TODAY_COLOUR)
+        for i in range(view.height - TASK_Y_OFFSET):
+            write(' ')
+            godown(1)
+            goleft(1)
+
     reset()
 
 def drawTask(view, i):
@@ -228,34 +275,12 @@ def drawTask(view, i):
 
     write(taskText)
 
-    # Set colour
-    if task.status == WAITING:
-        blockColour = setBg(WAITING_COLOUR)
-    elif task.status == ONGOING:
-        blockColour = setBg(ONGOING_COLOUR)
-    elif task.status == DONE:
-        blockColour = setBg(DONE_COLOUR)
-    elif task.status == CRITICAL:
-        blockColour = setBg(CRITICAL_COLOUR)
-
-    if view.selectingDeps:
-        if task in view.depsFor.deps:
-            blockColour = setBg(colour.brightRed)
-
-    # Get extra colour
-    extraColour = ''
-    if task.status == WAITING:
-        extraColour = getBg(WAITING_EXTRA_COLOUR)
-    elif task.status == ONGOING:
-        extraColour = getBg(ONGOING_EXTRA_COLOUR)
-    elif task.status == DONE:
-        extraColour = getBg(DONE_EXTRA_COLOUR)
-
     # Draw block
+    setFg(colour.black)
+    setBg(getTaskColour(view, task))
+
     blockUnit = 7 if view.view == DAY else 1
-
-    block = ' '*task.length*blockUnit + '$'*task.extra*blockUnit
-
+    block = ' '*task.length*blockUnit + '░'*task.extra*blockUnit
     start = task.start*blockUnit - view.firstDateOffset*blockUnit
     if start < 0:
         block = block[-start:]
@@ -263,8 +288,6 @@ def drawTask(view, i):
     if start < width:
         if len(block) + start > width:
             block = block[:width - start]
-
-        block = block.replace('$', extraColour + ' ', 1).replace('$', ' ')
 
         goto(view.taskWidth + start, y)
         write(block)

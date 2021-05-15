@@ -26,8 +26,11 @@ GROW_TASK = '+'
 SHRINK_TASK = '-'
 
 TOGGLE_DONE_OR_DEP = ' '
-
 TOGGLE_SELECT_DEPS = 'd'
+
+ADD_TASK = 'a'
+EDIT_TASK = 'e'
+
 
 def draw(view):
 
@@ -84,6 +87,9 @@ def process(view, char):
     elif char == TOGGLE_SELECT_DEPS:
         view.selectDeps()
 
+    #elif char == ADD_TASK:
+        #view.addTask()
+
     else:
         pass
 
@@ -110,37 +116,25 @@ if __name__ == '__main__':
 
         # Create the project and view
         project = Project('Example project')
-        project.startDate = datetime.date.today()
-        project.addTask('Task 0', 3, 0, True)
-        project.addTask('Task 1', 1, 0, True)
-        project.addTask('Task 2', 4, 0, True)
-        project.addTask('Task 3', 1, 0, True)
-        project.addTask('Task 4', 5, 0)
-        project.addTask('Task 5', 9, 0)
-        project.addTask('Task 6', 2, 0)
-        project.addTask('Task 7', 6, 0)
-        project.addTask('Task 8', 5, 0)
-        project.addTask('Task 9', 3, 0)
-        project.addTask('Task 10', 5, 0)
-        project.addTask('Task 11', 8, 0)
-        project.addTask('Task 12', 9, 0)
-        project.addTask('Task 13', 7, 0)
-        project.addTask('Task 14', 9, 0)
-        project.addTask('Task 15', 3, 0)
-        project.addTask('Task 16', 2, 0)
-        project.addTask('Task 17', 3, 0)
-
-        setBg(colour.default)
-        project.tasks[1].setDep(0)
-        project.tasks[2].setDep(1)
-        project.tasks[3].setDep(2)
-        project.tasks[4].setDep(3)
-        project.tasks[5].setDep(3)
-        project.tasks[6].setDep(3)
-
-        project.tasks[7].setDep(4)
-        project.tasks[7].setDep(5)
-        project.tasks[7].setDep(6)
+        project.startDate = datetime.date(2021, 5, 12)
+        project.addTask('Task 0', 1, 0)
+        project.addTask('Task 1', 1, 0)
+        project.addTask('Task 2', 1, 0)
+        project.addTask('Task 3', 1, 0)
+        project.addTask('Task 4', 1, 0)
+        project.addTask('Task 5', 1, 0)
+        project.addTask('Task 6', 1, 0)
+        project.addTask('Task 7', 1, 0)
+        project.addTask('Task 8', 1, 0)
+        project.addTask('Task 9', 1, 0)
+        project.addTask('Task 10', 1, 0)
+        project.addTask('Task 11', 1, 0)
+        project.addTask('Task 12', 1, 0)
+        project.addTask('Task 13', 1, 0)
+        project.addTask('Task 14', 1, 0)
+        project.addTask('Task 15', 1, 0)
+        project.addTask('Task 16', 1, 0)
+        project.addTask('Task 17', 1, 0)
 
         view = View(project)
 

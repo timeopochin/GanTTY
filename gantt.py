@@ -40,14 +40,18 @@ class Task:
         for dep in self.deps:
             if not dep.isDone:
                 return WAITING
-        return ONGOING if self.extra else CRITICAL
+        if self.end == self.project.end:
+            return CRITICAL
+        for dependent in self.dependents:
+            if not dependent.extra:
+                return CRITICAL
+        return ONGOING
 
     @property
     def extra(self):
-        dependents = getDependents(self)
-        if len(dependents):
+        if len(self.dependents):
             extra = -1
-            for dependent in dependents:
+            for dependent in self.dependents:
                 if dependent.start - self.end < extra or extra == -1:
                     extra = dependent.start - self.end
         else:
@@ -70,27 +74,40 @@ class Task:
                 start = dep.end
         return start
 
+    @property
+    def dependents(self):
+        return [task for task in self.project.tasks if self in task.deps]
+
+    def hasDependent(self, task):
+        for dependent in self.dependents:
+            if dependent == task or dependent.hasDependent(task):
+                return True
+        return False
+
     def hasDep(self, task):
         for dep in self.deps:
             if dep == task or dep.hasDep(task):
                 return True
         return False
 
-    def setDep(self, index):
-        newDep = self.project.tasks[index]
+    def setDep(self, newDep):
         if newDep == self or newDep.hasDep(self) or self.hasDep(newDep):
             return False
+        for dep in newDep.deps:
+            if self.hasDep(dep):
+                self.removeDep(dep)
+        for dependent in self.dependents:
+            if dependent.hasDep(newDep):
+                dependent.removeDep(newDep)
         self.deps.append(newDep)
         return True
 
-    def removeDep(self, index):
-        dep = self.project.tasks[index]
-        if dep in self.deps:
-            del self.deps[self.deps.index(dep)]
+    def removeDep(self, oldDep):
+        if oldDep in self.deps:
+            del self.deps[self.deps.index(oldDep)]
 
-def getDependents(required):
-    dependents = []
-    for task in required.project.tasks:
-        if required in task.deps:
-            dependents.append(task)
-    return dependents
+    def toggleDep(self, toggle):
+        if self.hasDep(toggle):
+            self.removeDep(toggle)
+        else:
+            self.setDep(toggle)
