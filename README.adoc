@@ -1,0 +1,50 @@
+== GanTTY
+
+_Project planning from the terminal_
+
+image::gantty_demo.gif[GanTTY demo]
+
+GanTTY is yet another project that I would consider a proof of
+concept, it is far from being a full feature project managing
+tool, but it has pretty colours so...
+
+=== Dependencies
+
+```
+python3
+stty
+```
+
+A terminal that supports Unicode and ANSI escape codes.
+
+=== Running
+
+Clone the repository, go into the folder and execute `main.py`
+
+```
+git clone https://github.com/timeopochin/GanTTY.git
+cd GanTTY
+python3 main.py
+```
+
+=== Usage
+
+File::
+* `q` to quit
+* `W` to save
+
+Navigation::
+* `h` and `l` to pan backwards and forwads in time
+* `J` and `K` to pan down and up
+* `g` and `G` to pan to the top and bottom
+* `j` and `k` to select next and previous task
+* `w` to toggle view between days and weeks
+* `H` and `L` to grow and shrink the left margin
+
+Tasks::
+* `a` to add a new task
+* `n` to rename a task
+* `e` to edit a task's description
+* `D` to delete a task
+* `<space>` to toggle a task's status
+* `d` to select a task's dependencies
