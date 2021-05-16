@@ -48,6 +48,7 @@ Tasks::
 * `D` to delete a task
 * `<space>` to toggle a task's status
 * `d` to select a task's dependencies
+* `+` and `-` to increase and decrease a task's length
 
 === TODOs
 
